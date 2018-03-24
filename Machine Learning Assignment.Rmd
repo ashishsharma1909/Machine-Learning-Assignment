@@ -1,0 +1,117 @@
+---
+title: "Prediction Assignment Machine Learning"
+author: "Ashish"
+date: "21 March 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+## Executive Summary
+
+####One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, the goal is to analyze data from accelerometers on the belt, forearm, arm, and dumbell of six participants. They were asked to perform barbell lifts correctly and incorrectly in five different ways. For more information see the "Weight Lifting Exercises Dataset" in the following location:
+
+#####http://groupware.les.inf.puc-rio.br/har
+
+#####Specifically, the goal of this machine learning exercise is to predict the manner in which the participants did the exercise-that is, to predict the "classe" variable found in the training set. The prediction model will then be used to predict twenty different test cases, as provided in the testing dataset.
+
+#####Data Processing and Analysis
+#####The training and testing datasets used in the analysis may be found as follows:
+
+#####Training dataset:
+#####https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+#####Testing dataset:
+#####https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+#####We begin by loading the required libraries and reading in the training and testing datasets, assigning missing values to entries that are currently 'NA' or blank:
+
+##Goal of assignment
+####project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+```{r}
+# Loading the libraries
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+
+```
+
+##DATA ACQUISITION
+
+#####Loading the dataset from the URL. After the training datased should be divided by two parts: training and testing sets. 80% of the dataset is used for modeling, 20% of the dataset is used for the quiz result.
+
+```{r}
+data <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+data_test <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+
+
+
+train <- createDataPartition(y = data$classe, p=.80, list = F)
+training <- data[train,]
+testing <- data[-train,]
+
+# Cleaning the dataset and correction analysis
+
+col_names <- grep("name|timestamp|window|X", colnames(training), value=F) 
+training_columns <- training[,-col_names]
+#select variables with high (over 95%) missing data --> exclude them from the analysis
+training_columns[training_columns==""] <- NA
+NArate <- apply(training_columns, 2, function(x) sum(is.na(x)))/nrow(training_columns)
+training_columns <- training_columns[!(NArate>0.95)]
+summary(training_columns)
+
+
+```
+
+###PRINCIPAL COMPONENT ANALYSIS
+
+```{r}
+pre_process <- preProcess(training_columns[,1:52], method = "pca", thresh = .8) #12 components are required
+pre_process <- preProcess(training_columns[,1:52], method = "pca", thresh = .9) #18 components are required
+pre_process <- preProcess(training_columns[,1:52], method = "pca", thresh = .95) #25 components are required
+
+pre_process <- preProcess(training_columns[,1:52], method="pca", pcaComp=25) 
+pre_process$rotation
+training_preprocess <- predict(pre_process, training_columns[,1:52])
+```
+
+
+###RANDOM FOREST
+```{r}
+fit <- randomForest(training_columns$classe ~ .,data = training_preprocess, do.trace=F)
+plot(fit)
+varImpPlot(fit)
+```
+
+
+###MODEL VALIDATION
+#####Applying for the testing set and predict for quiz data
+
+```{r}
+
+testing_columns <- testing[,-col_names]
+testing_columns[testing_columns==""] <- NA
+NArate <- apply(testing_columns, 2, function(x) sum(is.na(x)))/nrow(testing_columns)
+testing_columns <- testing_columns[!(NArate>0.95)]
+confusionMatrix(testing_columns$classe,predict(fit,predict(pre_process,testing_columns[,1:52])))
+
+testing_data_columns <- data_test[,-col_names]
+testing_data_columns[testing_data_columns==""] <- NA
+NArate <- apply(testing_data_columns, 2, function(x) sum(is.na(x)))/nrow(testing_data_columns)
+testing_data_columns <- testing_data_columns[!(NArate>0.95)]
+testdataPC <- predict(pre_process,testing_data_columns[,1:52])
+testing_data_columns$classe <- predict(fit,testdataPC)
+testing_data_columns$classe
+
+
+
+
+
+```
